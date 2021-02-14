@@ -1,0 +1,553 @@
+module vending_machine #(
+parameter NUM_OF_PRODUCTS   = 5,
+          MONEY_BUTTONS     = 3,
+		  PRODUCT0_QTY		= 5,
+		  PRODUCT1_QTY		= 9,
+		  PRODUCT2_QTY		= 19,
+		  PRODUCT3_QTY		= 15,
+		  PRODUCT4_QTY		= 1,
+          PRODUCT0_PRICE    = 2,
+          PRODUCT1_PRICE    = 5,
+          PRODUCT2_PRICE    = 7,
+          PRODUCT3_PRICE    = 15,
+          PRODUCT4_PRICE    = 18,
+          DISPLAY_TIME      = 5,
+          DISPLAY_TIME_TEST = 0)
+(
+clk,
+rstn,
+
+product_pulse,
+money_pulse,
+
+tran_cancel_pulse,
+product_refill_pulse,
+
+seven_seg0,
+seven_seg1,
+seven_seg2,
+seven_seg3,
+seven_seg4,
+seven_seg5
+);
+
+`include "define.vh"
+
+input clk;
+input rstn;
+
+input [NUM_OF_PRODUCTS-1:0] product_pulse;
+input [MONEY_BUTTONS-1:0] money_pulse;
+
+input tran_cancel_pulse;
+input product_refill_pulse;
+
+output reg [7:0] seven_seg0;
+output reg [7:0] seven_seg1;
+output reg [7:0] seven_seg2;
+output reg [7:0] seven_seg3;
+output reg [7:0] seven_seg4;
+output reg [7:0] seven_seg5;
+
+reg  [2:0]  state, n_state;
+
+reg  [27:0] timer; // Max count to 5 seconds based on 50MHz
+wire        timer_en;
+reg         timer_done;
+
+reg  [29:0] watchdog_timer; // Count of 15 seconds based on 50MHz
+reg         watchdog_timer_done;
+reg         watchdog_timer_done_hold;
+
+reg  [4:0]  money_entered;
+reg  [4:0]  money_expected;
+wire [4:0]  money_to_return;
+reg  [4:0]  price_of_curr_product;
+
+reg  [4:0]  curr_product;
+
+reg  [3:0]  p0_quantity;
+reg  [3:0]  p1_quantity;
+reg  [3:0]  p2_quantity;
+reg  [3:0]  p3_quantity;
+reg  [3:0]  p4_quantity;
+reg  [4:0]  no_stock;
+
+reg  [2:0]  idle_product_display_cnt;
+
+wire [3:0]  p0_quantity_tenth_place, p0_quantity_one_place;
+wire [3:0]  p1_quantity_tenth_place, p1_quantity_one_place;
+wire [3:0]  p2_quantity_tenth_place, p2_quantity_one_place;
+wire [3:0]  p3_quantity_tenth_place, p3_quantity_one_place;
+wire [3:0]  p4_quantity_tenth_place, p4_quantity_one_place;
+wire [3:0]  product0_price_tenth_place, product0_price_one_place;
+wire [3:0]  product1_price_tenth_place, product1_price_one_place;
+wire [3:0]  product2_price_tenth_place, product2_price_one_place;
+wire [3:0]  product3_price_tenth_place, product3_price_one_place;
+wire [3:0]  product4_price_tenth_place, product4_price_one_place;
+wire [3:0]  price_tenth_place, price_one_place;
+wire [3:0]  mon_exp_tenth_place, mon_exp_one_place;
+wire [3:0]  mon2rtrn_tenth_place, mon2rtrn_one_place;
+
+localparam IDLE         = 3'd0,
+           PRODUCT_PROC = 3'd1,
+           MONEY_PROC   = 3'd2,
+           DISPATCH     = 3'd3,
+           MONEY_RETURN = 3'd4,
+           CANCEL       = 3'd5,
+           THANKS       = 3'd6;
+
+always @(posedge clk or negedge rstn) begin
+   if(!rstn) begin
+      state <= 'b0;
+   end
+   else
+      state <= n_state;
+end
+
+always @*
+begin
+   n_state = IDLE;
+   case(state)
+      IDLE:         if(|product_pulse) begin
+                       if((product_pulse[0] && no_stock[0]) |
+                          (product_pulse[1] && no_stock[1]) |
+                          (product_pulse[2] && no_stock[2]) |
+                          (product_pulse[3] && no_stock[3]) |
+                          (product_pulse[4] && no_stock[4]))
+                          n_state = THANKS;
+                       else
+                          n_state = PRODUCT_PROC;
+                    end
+                    else begin
+                       n_state = IDLE;
+                    end
+      PRODUCT_PROC: if(tran_cancel_pulse) begin
+                       n_state = CANCEL;
+                    end
+                    else if(!timer_done) begin
+                       n_state = PRODUCT_PROC;
+                    end
+                    else begin
+                       n_state = MONEY_PROC;
+                    end
+      MONEY_PROC:   if(tran_cancel_pulse | watchdog_timer_done) begin
+                       n_state = CANCEL;
+                    end
+                    else begin
+                       if (money_expected >= price_of_curr_product) begin
+                          n_state = DISPATCH;
+                       end
+                       else begin
+                          n_state = MONEY_PROC;
+                       end
+                    end
+      DISPATCH:      if(!timer_done) begin
+                        n_state = DISPATCH;
+                     end
+                     else begin
+                        if(money_expected > price_of_curr_product) begin
+                           n_state = MONEY_RETURN;
+                        end
+                        else begin
+                           n_state = THANKS;
+                        end
+                     end
+      MONEY_RETURN: if(!timer_done) begin
+                       n_state = MONEY_RETURN;
+                    end
+                    else begin
+                       n_state = THANKS;
+                    end
+      CANCEL:       if(!timer_done) begin
+                       n_state = CANCEL;
+                    end
+                    else if(money_expected != 0)
+                       n_state = MONEY_RETURN;
+                    else begin
+                       n_state = IDLE;
+                    end
+     THANKS:        if(!timer_done) begin
+                       n_state = THANKS;
+                    end
+                    else begin
+                       n_state = IDLE;
+                    end
+   endcase
+end
+
+assign timer_en = ((state == IDLE) |
+                   (state == PRODUCT_PROC) |
+                   (state == DISPATCH) |
+                   (state == MONEY_RETURN) |
+                   (state == CANCEL) |
+                   (state == THANKS));
+
+assign money_to_return = (money_expected - price_of_curr_product);
+
+always @(posedge clk or negedge rstn) begin
+   if(~rstn)
+      timer <= 'b0;
+   else begin
+      if(timer_done | (|product_pulse))
+         timer <= 'b0;
+      else if(timer_en)
+         timer <= timer + 'd1;
+   end
+end
+
+always @(posedge clk or negedge rstn) begin
+   if(~rstn)
+      watchdog_timer <= 'b0;
+   else begin
+      if((|money_pulse) || timer_done)
+         watchdog_timer <= 'b0;
+      else if(state == MONEY_PROC)
+         watchdog_timer <= watchdog_timer + 'd1;
+   end
+end
+
+always @*
+begin
+   if(DISPLAY_TIME_TEST)
+      timer_done = (timer == (28'd5-28'd1));
+   else
+      timer_done = (timer == ((DISPLAY_TIME*50000000)-1));
+   if(DISPLAY_TIME_TEST)
+      watchdog_timer_done = (watchdog_timer == (30'd20-30'd1));
+   else
+      watchdog_timer_done = (watchdog_timer == ((10*50000000)-1));
+end
+
+always @(posedge clk or negedge rstn)
+begin
+   if(~rstn)
+      watchdog_timer_done_hold <= 1'b0;
+   else begin
+      if(state == THANKS)
+         watchdog_timer_done_hold <= 1'b0;
+      else if(watchdog_timer_done)
+         watchdog_timer_done_hold <= 1'b1;
+   end
+end
+
+always @(posedge clk or negedge rstn)
+begin
+   if(!rstn)
+      money_expected <= 'b0;
+   else begin
+      if(state == PRODUCT_PROC)
+         money_expected <= 'b0;
+      else if (state == MONEY_PROC)
+         money_expected <= money_expected + money_entered;
+   end
+end
+
+always @(posedge clk or negedge rstn)
+begin
+   if(!rstn)
+      curr_product <= 'b0;
+   else begin
+      if(((state == CANCEL) | (state == THANKS)) && timer_done)
+         curr_product <= 'b0;
+      else if ((|product_pulse) && (curr_product==0))
+         curr_product <= product_pulse;
+   end
+end
+
+always @*
+begin
+   case (curr_product)
+      5'b00001 : price_of_curr_product = PRODUCT0_PRICE;
+      5'b00010 : price_of_curr_product = PRODUCT1_PRICE;
+      5'b00100 : price_of_curr_product = PRODUCT2_PRICE;
+      5'b01000 : price_of_curr_product = PRODUCT3_PRICE;
+      5'b10000 : price_of_curr_product = PRODUCT4_PRICE;
+      default  : price_of_curr_product = 5'd0;
+   endcase
+end
+
+always @*
+begin
+   case(money_pulse)
+      3'b001 : money_entered = 1;
+      3'b010 : money_entered = 5;
+      3'b100 : money_entered = 10;
+      default: money_entered = 5'd0;
+   endcase
+end
+
+always @(posedge clk or negedge rstn) begin
+   if(!rstn) begin
+      p0_quantity <= PRODUCT0_QTY;
+      p1_quantity <= PRODUCT1_QTY;
+      p2_quantity <= PRODUCT2_QTY;
+      p3_quantity <= PRODUCT3_QTY;
+      p4_quantity <= PRODUCT4_QTY;
+   end
+   else if(product_refill_pulse) begin
+      p0_quantity <= PRODUCT0_QTY;
+      p1_quantity <= PRODUCT1_QTY;
+      p2_quantity <= PRODUCT2_QTY;
+      p3_quantity <= PRODUCT3_QTY;
+      p4_quantity <= PRODUCT4_QTY;
+   end
+   else begin
+      if((state == DISPATCH) && curr_product[0] && timer_done)
+         p0_quantity <= p0_quantity - 1;
+      if((state == DISPATCH) && curr_product[1] && timer_done)
+         p1_quantity <= p1_quantity - 1;
+      if((state == DISPATCH) && curr_product[2] && timer_done)
+         p2_quantity <= p2_quantity - 1;
+      if((state == DISPATCH) && curr_product[3] && timer_done)
+         p3_quantity <= p3_quantity - 1;
+      if((state == DISPATCH) && curr_product[4] && timer_done)
+         p4_quantity <= p4_quantity - 1;
+   end
+end
+
+always @(posedge clk or negedge rstn) begin
+   if(!rstn)
+      idle_product_display_cnt <= 3'b0;
+   else if(timer_done) begin
+      if((idle_product_display_cnt == 4) | (state != IDLE))
+         idle_product_display_cnt <= 0;
+      else if((state == IDLE))
+         idle_product_display_cnt <= idle_product_display_cnt + 1;
+   end
+end
+
+always @*
+begin
+   seven_seg5 = OFF;
+   seven_seg4 = OFF;
+   seven_seg3 = OFF;
+   seven_seg2 = OFF;
+   seven_seg1 = OFF;
+   seven_seg0 = OFF;
+   case(state)
+      IDLE:         case (idle_product_display_cnt)
+                    0 : begin
+                           seven_seg5 = P;
+                           seven_seg4 = N1;
+                           seven_seg3 = hex_en(product0_price_tenth_place);
+                           seven_seg2 = hex_en(product0_price_one_place);
+                           if(p0_quantity<10) begin
+                           seven_seg1 = OFF;
+                           seven_seg0 = hex_en(p0_quantity_one_place);
+                           end
+                           else begin
+                           seven_seg1 = hex_en(p0_quantity_tenth_place);
+                           seven_seg0 = hex_en(p0_quantity_one_place);
+                           end
+                        end
+                    1 : begin
+                           seven_seg5 = P;
+                           seven_seg4 = N2;
+                           seven_seg3 = hex_en(product1_price_tenth_place);
+                           seven_seg2 = hex_en(product1_price_one_place);
+                           if(p1_quantity<10) begin
+                           seven_seg1 = OFF;
+                           seven_seg0 = hex_en(p1_quantity_one_place);
+                           end
+                           else begin
+                           seven_seg1 = hex_en(p1_quantity_tenth_place);
+                           seven_seg0 = hex_en(p1_quantity_one_place);
+                           end
+                        end
+                    2 : begin
+                           seven_seg5 = P;
+                           seven_seg4 = N3;
+                           seven_seg3 = hex_en(product2_price_tenth_place);
+                           seven_seg2 = hex_en(product2_price_one_place);
+                           if(p2_quantity<10) begin
+                           seven_seg1 = OFF;
+                           seven_seg0 = hex_en(p2_quantity_one_place);
+                           end
+                           else begin
+                           seven_seg1 = hex_en(p2_quantity_tenth_place);
+                           seven_seg0 = hex_en(p2_quantity_one_place);
+                           end
+                        end
+                    3 : begin
+                           seven_seg5 = P;
+                           seven_seg4 = N4;
+                           seven_seg3 = hex_en(product3_price_tenth_place);
+                           seven_seg2 = hex_en(product3_price_one_place);
+                           if(p3_quantity<10) begin
+                           seven_seg1 = OFF;
+                           seven_seg0 = hex_en(p3_quantity_one_place);
+                           end
+                           else begin
+                           seven_seg1 = hex_en(p3_quantity_tenth_place);
+                           seven_seg0 = hex_en(p3_quantity_one_place);
+                           end
+                        end
+                    4 : begin
+                           seven_seg5 = P;
+                           seven_seg4 = N5;
+                           seven_seg3 = hex_en(product4_price_tenth_place);
+                           seven_seg2 = hex_en(product4_price_one_place);
+                           if(p4_quantity<10) begin
+                           seven_seg1 = OFF;
+                           seven_seg0 = hex_en(p4_quantity_one_place);
+                           end
+                           else begin
+                           seven_seg1 = hex_en(p4_quantity_tenth_place);
+                           seven_seg0 = hex_en(p4_quantity_one_place);
+                           end
+                        end
+                    endcase
+
+      PRODUCT_PROC: begin
+                    seven_seg5 = E;
+                    seven_seg4 = N;
+                    seven_seg3 = T;
+                    seven_seg2 = R;
+                    if(price_of_curr_product < 10) begin
+                       seven_seg1 = OFF;
+                       seven_seg0 = hex_en(price_one_place); // 0th digit
+                    end
+                    else begin
+                       seven_seg1 = hex_en(price_tenth_place); // 10th digit
+                       seven_seg0 = hex_en(price_one_place); // 0th digit
+                    end
+                    end
+
+      MONEY_PROC:   begin
+                    if(price_of_curr_product < 10) begin
+                       seven_seg5 = OFF;
+                       seven_seg4 = hex_en(price_one_place); // 0th digit
+                    end
+                    else begin
+                       seven_seg5 = hex_en(price_tenth_place); // 10th digit
+                       seven_seg4 = hex_en(price_one_place); // 0th digit
+                    end
+                    if(money_expected < 10) begin
+                       seven_seg1 = OFF;
+                       seven_seg0 = hex_en(mon_exp_one_place); // 0th digit
+                    end
+                    else begin
+                       seven_seg1 = hex_en(mon_exp_tenth_place); // 10th digit
+                       seven_seg0 = hex_en(mon_exp_one_place); // 0th digit
+                    end
+                    end
+
+      DISPATCH:     begin
+                    seven_seg4 = E;
+                    seven_seg3 = N;
+                    seven_seg2 = J;
+                    seven_seg1 = O;
+                    seven_seg0 = Y;
+                    end
+
+      MONEY_RETURN: begin
+                    seven_seg5 = C;
+                    seven_seg4 = H;
+                    seven_seg3 = N;
+                    seven_seg2 = G;
+                    if(money_to_return < 10) begin
+                       seven_seg1 = OFF;
+                       seven_seg0 = hex_en(mon2rtrn_one_place); // 0th digit
+                    end
+                    else begin
+                       seven_seg1 = hex_en(mon2rtrn_tenth_place); // 10th digit
+                       seven_seg0 = hex_en(mon2rtrn_one_place); // 0th digit
+                    end
+                    end
+
+      CANCEL:       if (watchdog_timer_done_hold) begin
+                    seven_seg5 = T;
+                    seven_seg4 = I;
+                    seven_seg3 = M;
+                    seven_seg2 = O;
+                    seven_seg1 = U;
+                    seven_seg0 = T;
+                    end
+                    else begin
+                    seven_seg5 = C;
+                    seven_seg4 = A;
+                    seven_seg3 = N;
+                    seven_seg2 = C;
+                    seven_seg1 = E;
+                    seven_seg0 = L;
+                    end
+
+      THANKS:       if((curr_product[0] && no_stock[0]) |
+                       (curr_product[1] && no_stock[1]) |
+                       (curr_product[2] && no_stock[2]) |
+                       (curr_product[3] && no_stock[3]) |
+                       (curr_product[4] && no_stock[4])) begin
+                    seven_seg5 = N;
+                    seven_seg4 = O;
+                    seven_seg3 = S;
+                    seven_seg2 = T;
+                    seven_seg1 = O;
+                    seven_seg0 = K;
+                    end
+                    else begin
+                    seven_seg5 = T;
+                    seven_seg4 = H;
+                    seven_seg3 = A;
+                    seven_seg2 = N;
+                    seven_seg1 = K;
+                    seven_seg0 = S;
+                    end
+   endcase
+end
+
+always @(posedge clk or negedge rstn) begin
+   if(!rstn)
+      no_stock <= 0;
+   else begin
+      if(product_refill_pulse)
+         no_stock <= 0;
+      else if((state == THANKS) && timer_done) begin
+         if(p0_quantity == 0)
+            no_stock[0] <= 1'b1;
+         if(p1_quantity == 0)
+            no_stock[1] <= 1'b1;
+         if(p2_quantity == 0)
+            no_stock[2] <= 1'b1;
+         if(p3_quantity == 0)
+            no_stock[3] <= 1'b1;
+         if(p4_quantity == 0)
+            no_stock[4] <= 1'b1;
+      end
+   end
+end
+
+binary2bcd u_p0_quantity_bin2bcd (.bi({4'b0,p0_quantity}),.h(),.t(p0_quantity_tenth_place),.o(p0_quantity_one_place));
+binary2bcd u_p1_quantity_bin2bcd (.bi({4'b0,p1_quantity}),.h(),.t(p1_quantity_tenth_place),.o(p1_quantity_one_place));
+binary2bcd u_p2_quantity_bin2bcd (.bi({4'b0,p2_quantity}),.h(),.t(p2_quantity_tenth_place),.o(p2_quantity_one_place));
+binary2bcd u_p3_quantity_bin2bcd (.bi({4'b0,p3_quantity}),.h(),.t(p3_quantity_tenth_place),.o(p3_quantity_one_place));
+binary2bcd u_p4_quantity_bin2bcd (.bi({4'b0,p4_quantity}),.h(),.t(p4_quantity_tenth_place),.o(p4_quantity_one_place));
+binary2bcd u_product0_bin2bcd    (.bi({4'b0,PRODUCT0_PRICE}),.h(),.t(product0_price_tenth_place),.o(product0_price_one_place));
+binary2bcd u_product1_bin2bcd    (.bi({4'b0,PRODUCT1_PRICE}),.h(),.t(product1_price_tenth_place),.o(product1_price_one_place));
+binary2bcd u_product2_bin2bcd    (.bi({4'b0,PRODUCT2_PRICE}),.h(),.t(product2_price_tenth_place),.o(product2_price_one_place));
+binary2bcd u_product3_bin2bcd    (.bi({4'b0,PRODUCT3_PRICE}),.h(),.t(product3_price_tenth_place),.o(product3_price_one_place));
+binary2bcd u_product4_bin2bcd    (.bi({4'b0,PRODUCT4_PRICE}),.h(),.t(product4_price_tenth_place),.o(product4_price_one_place));
+binary2bcd u_price_bin2bcd       (.bi({3'b0,price_of_curr_product}),.h(),.t(price_tenth_place),.o(price_one_place));
+binary2bcd u_mon_exp_bin2bcd     (.bi({3'b0,money_expected}),.h(),.t(mon_exp_tenth_place),.o(mon_exp_one_place));
+binary2bcd u_mon2rtrn_bin2bcd    (.bi({3'b0,money_to_return}),.h(),.t(mon2rtrn_tenth_place),.o(mon2rtrn_one_place));
+
+function [7:0] hex_en;
+input [3:0] binary;
+begin
+   case(binary[3:0])
+      0:       hex_en = N0;
+      1:       hex_en = N1;
+      2:       hex_en = N2;
+      3:       hex_en = N3;
+      4:       hex_en = N4;
+      5:       hex_en = N5;
+      6:       hex_en = N6;
+      7:       hex_en = N7;
+      8:       hex_en = N8;
+      9:       hex_en = N9;
+      default: hex_en = N0;
+   endcase
+end
+endfunction
+
+endmodule

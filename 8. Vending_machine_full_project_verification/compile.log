@@ -1,0 +1,111 @@
+
+Warning-[UNKWN_OPTVSIM] Unknown option passed
+  Ignoring unknown option '-I-debug_all' passed to 'vcs' and continuing 
+  compilation.
+
+Command: vcs +v2k -I-debug_all -debug_pp -sverilog vending_machine_tb.sv -l compile.log \
+
+                         Chronologic VCS (TM)
+           Version I-2014.03-2 -- Sun Dec  8 11:00:09 2019
+               Copyright (c) 1991-2014 by Synopsys Inc.
+                         ALL RIGHTS RESERVED
+
+This program is proprietary and confidential information of Synopsys Inc.
+and may be used and disclosed only as authorized in a license agreement
+controlling such use and disclosure.
+
+Parsing design file 'vending_machine_tb.sv'
+Parsing included file './binary2bcd.v'.
+Back to file 'vending_machine_tb.sv'.
+Parsing included file './keypad.v'.
+Back to file 'vending_machine_tb.sv'.
+Parsing included file './pedge_det.v'.
+Back to file 'vending_machine_tb.sv'.
+Parsing included file './vending_machine.v'.
+Parsing included file 'define.vh'.
+Back to file './vending_machine.v'.
+Back to file 'vending_machine_tb.sv'.
+Parsing included file './vending_machine_top.v'.
+Back to file 'vending_machine_tb.sv'.
+Top Level Modules:
+       keypad
+       Vending_Machine_TB
+TimeScale is 1 ns / 1 ns
+
+Warning-[PCWM-W] Port connection width mismatch
+./vending_machine.v, 525
+"binary2bcd u_product0_bin2bcd( .bi ({4'b0, PRODUCT0_PRICE}),  .t (product0_price_tenth_place),  .o (product0_price_one_place));"
+  The following 36-bit expression is connected to 8-bit port "bi" of module 
+  "binary2bcd", instance "u_product0_bin2bcd".
+  Expression: {4'b0, PRODUCT0_PRICE}
+  	use +lint=PCWM for more details
+
+
+Warning-[PCWM-W] Port connection width mismatch
+./vending_machine.v, 526
+"binary2bcd u_product1_bin2bcd( .bi ({4'b0, PRODUCT1_PRICE}),  .t (product1_price_tenth_place),  .o (product1_price_one_place));"
+  The following 36-bit expression is connected to 8-bit port "bi" of module 
+  "binary2bcd", instance "u_product1_bin2bcd".
+  Expression: {4'b0, PRODUCT1_PRICE}
+  	use +lint=PCWM for more details
+
+
+Warning-[PCWM-W] Port connection width mismatch
+./vending_machine.v, 527
+"binary2bcd u_product2_bin2bcd( .bi ({4'b0, PRODUCT2_PRICE}),  .t (product2_price_tenth_place),  .o (product2_price_one_place));"
+  The following 36-bit expression is connected to 8-bit port "bi" of module 
+  "binary2bcd", instance "u_product2_bin2bcd".
+  Expression: {4'b0, PRODUCT2_PRICE}
+  	use +lint=PCWM for more details
+
+
+Warning-[PCWM-W] Port connection width mismatch
+./vending_machine.v, 528
+"binary2bcd u_product3_bin2bcd( .bi ({4'b0, PRODUCT3_PRICE}),  .t (product3_price_tenth_place),  .o (product3_price_one_place));"
+  The following 36-bit expression is connected to 8-bit port "bi" of module 
+  "binary2bcd", instance "u_product3_bin2bcd".
+  Expression: {4'b0, PRODUCT3_PRICE}
+  	use +lint=PCWM for more details
+
+
+Warning-[PCWM-W] Port connection width mismatch
+./vending_machine.v, 529
+"binary2bcd u_product4_bin2bcd( .bi ({4'b0, PRODUCT4_PRICE}),  .t (product4_price_tenth_place),  .o (product4_price_one_place));"
+  The following 36-bit expression is connected to 8-bit port "bi" of module 
+  "binary2bcd", instance "u_product4_bin2bcd".
+  Expression: {4'b0, PRODUCT4_PRICE}
+  	use +lint=PCWM for more details
+
+
+Warning-[PCWM-W] Port connection width mismatch
+vending_machine_tb.sv, 44
+"vending_machine_top vm_inst( .clk (clk),  .rstn (rstn),  .row (row),  .col (col),  .key_value_in (key_value_in),  .seven_seg0 (seven_seg0),  .seven_seg1 (seven_seg1),  .seven_seg2 (seven_seg2),  .seven_seg3 (seven_seg3),  .seven_seg4 (seven_seg4),  .seven_seg5 (seven_seg5));"
+  The following 9-bit expression is connected to 10-bit port "key_value_in" of
+  module "vending_machine_top", instance "vm_inst".
+  Expression: key_value_in
+  	use +lint=PCWM for more details
+
+Starting vcs inline pass...
+5 modules and 0 UDP read.
+recompiling module binary2bcd
+recompiling module keypad
+recompiling module pedge_det
+recompiling module Vending_Machine_TB
+All of 5 modules done
+rm -f _csrc*.so linux_scvhdl_*.so pre_vcsobj_*.so share_vcsobj_*.so
+ld -m elf_i386 -shared -o .//../simv.daidir//_csrc1.so --whole-archive _vcsobj_1_1.a \
+--no-whole-archive
+ld -m elf_i386 -shared -o .//../simv.daidir//_csrc0.so 5NrI_d.o 5NrIB_d.o SIM_l.o \
+
+if [ -x ../simv ]; then chmod -x ../simv; fi
+g++  -o ../simv  -m32 -m32   -Wl,-rpath-link=./ -Wl,-rpath='$ORIGIN'/simv.daidir/ \
+-Wl,-rpath='$ORIGIN'/simv.daidir//scsim.db.dir  _csrc1.so _csrc0.so     rmapats_mop.o \
+rmapats.o rmar.o           /apps/synopsys/VCSMX_NEW/linux/lib/libzerosoft_rt_stubs.so \
+/apps/synopsys/VCSMX_NEW/linux/lib/libvirsim.so /apps/synopsys/VCSMX_NEW/linux/lib/librterrorinf.so \
+/apps/synopsys/VCSMX_NEW/linux/lib/libsnpsmalloc.so    /apps/synopsys/VCSMX_NEW/linux/lib/libvcsnew.so \
+/apps/synopsys/VCSMX_NEW/linux/lib/libuclinative.so   -Wl,-whole-archive /apps/synopsys/VCSMX_NEW/linux/lib/libvcsucli.so \
+-Wl,-no-whole-archive          /apps/synopsys/VCSMX_NEW/linux/lib/vcs_save_restore_new.o \
+/apps/synopsys/VCSMX_NEW/linux/lib/ctype-stubs_32.a -ldl -lm  -lc -lpthread -ldl \
+
+../simv up to date
+CPU time: .199 seconds to compile + .107 seconds to elab + .165 seconds to link

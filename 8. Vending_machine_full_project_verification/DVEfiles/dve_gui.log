@@ -1,0 +1,8 @@
+The file 'vcdplus.vpd' was opened successfully.
+Loading db file '/apps/synopsys/VCSMX_NEW/gui/dve/libraries/syn/generic.sdb'
+2 drivers (1 active statement) found for signal: Vending_Machine_TB.vm_inst.u_vending_machine.state[2:0]
+2 drivers (1 active statement) found for signal: Vending_Machine_TB.vm_inst.u_vending_machine.timer_done
+15 loads found for signal: Vending_Machine_TB.vm_inst.u_vending_machine.timer_done
+2 drivers (1 active statement) found for signal: Vending_Machine_TB.vm_inst.u_vending_machine.timer_done
+14 drivers (1 active statement) found for signal: Vending_Machine_TB.seven_seg5[7:0]
+14 drivers (1 active statement) found for signal: Vending_Machine_TB.vm_inst.u_vending_machine.seven_seg5[7:0]
